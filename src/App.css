@@ -1,0 +1,51 @@
+/* Custom scrollbar for filter selection */
+.filter-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.filter-scrollbar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.filter-scrollbar::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.filter-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* Face detection landmarks (for debugging) */
+.landmark-dot {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background-color: #00ff00;
+  border-radius: 50%;
+  margin-left: -2px;
+  margin-top: -2px;
+}
+
+.detection-box {
+  position: absolute;
+  border: 2px solid #00ff00;
+  box-sizing: border-box;
+}
+
+/* Filter transitions */
+.filter-item {
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.filter-item:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.filter-item.active {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
