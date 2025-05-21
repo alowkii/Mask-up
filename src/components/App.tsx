@@ -119,7 +119,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col relative overflow-hidden">
-      <header className="bg-white shadow-sm p-4 z-10">
+      <header className="bg-white shadow-sm p-2 z-10">
         <h1 className="text-xl font-bold text-gray-800">AR Face Filter</h1>
         <div className="text-sm text-gray-500 mt-1">
           {isModelLoading && "Loading face detection models..."}

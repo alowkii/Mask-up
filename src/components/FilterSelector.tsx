@@ -32,7 +32,7 @@ const FilterSelector: React.FC<FilterSelectorProps> = ({
 
   return (
     <div className={`bg-white rounded-lg shadow-lg p-4 ${className}`}>
-      <h2 className="text-lg font-bold mb-4">Filters</h2>
+      <h2 className="text-slate-900 text-lg font-bold mb-4">Filters</h2>
 
       {Object.entries(filtersByCategory).map(([category, categoryFilters]) => (
         <div key={category} className="mb-6">
@@ -48,6 +48,7 @@ const FilterSelector: React.FC<FilterSelectorProps> = ({
                   w-16 h-16 rounded-lg overflow-hidden 
                   flex items-center justify-center
                   transition-all duration-200
+                  bg-black
                   ${
                     isFilterSelected(filter)
                       ? "ring-2 ring-blue-500 shadow-lg scale-110"

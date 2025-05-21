@@ -24,11 +24,11 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         <button
           onClick={onFilterPanelToggle}
           className={`
-            flex items-center justify-center p-3 rounded-full 
+            bg-slate-400 flex items-center justify-center p-3 rounded-full 
             transition-colors duration-200
             ${
               isFilterPanelOpen
-                ? "bg-blue-100 text-blue-600"
+                ? "bg-blue-100 text-slate-100"
                 : "bg-gray-100 hover:bg-gray-200"
             }
             relative
