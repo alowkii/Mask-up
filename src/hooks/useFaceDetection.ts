@@ -41,8 +41,16 @@ export function useFaceDetection({
     setState((prev) => ({ ...prev, isModelLoading: true }));
 
     try {
+      console.log("Loading face detection models from:", MODEL_URL);
+
+      // Load models with more detailed error handling
+      console.log("Loading tiny face detector...");
       await faceapi.loadTinyFaceDetectorModel(MODEL_URL);
+
+      console.log("Loading face landmarks model...");
       await faceapi.loadFaceLandmarkModel(MODEL_URL);
+
+      console.log("Loading face expression model...");
       await faceapi.loadFaceExpressionModel(MODEL_URL);
 
       setState((prev) => ({
@@ -55,10 +63,29 @@ export function useFaceDetection({
       console.log("Face detection models loaded successfully");
     } catch (error) {
       console.error("Error loading face detection models:", error);
+
+      // More specific error message
+      let errorMessage = ERROR_MESSAGES.MODEL_LOAD;
+      if (error instanceof Error) {
+        if (
+          error.message.includes("404") ||
+          error.message.includes("Not Found")
+        ) {
+          errorMessage =
+            "Face detection model files not found. Please ensure the models are downloaded in the public/models directory.";
+        } else if (
+          error.message.includes("NetworkError") ||
+          error.message.includes("Failed to fetch")
+        ) {
+          errorMessage =
+            "Network error loading models. Please check your internet connection and try again.";
+        }
+      }
+
       setState((prev) => ({
         ...prev,
         isModelLoading: false,
-        error: new Error(ERROR_MESSAGES.MODEL_LOAD),
+        error: new Error(errorMessage),
       }));
     }
   }, [state.isModelLoaded, state.isModelLoading]);

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import Webcam from "react-webcam";
 import WebcamView from "./WebcamView";
 import FilterOverlay from "./FilterOverlay";
 import FilterSelector from "./FilterSelector";
@@ -34,9 +33,11 @@ const App: React.FC = () => {
   });
 
   // Initialize screenshot functionality
-  const { takeScreenshot, downloadScreenshot } = useScreenshot({
+  const { takeScreenshot, setElementRef } = useScreenshot({
     filename: "ar-face-filter",
     onScreenshotTaken: (dataUrl) => {
+      console.log("📸 Screenshot taken successfully");
+
       // Show a brief flash effect
       if (mainContainerRef.current) {
         mainContainerRef.current.classList.add("screenshot-flash");
@@ -48,38 +49,50 @@ const App: React.FC = () => {
       // Download the image
       const link = document.createElement("a");
       link.href = dataUrl;
-      link.download = `ar-face-filter-${new Date().toISOString()}.jpg`;
+      link.download = `ar-face-filter-${Date.now()}.jpg`;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
     },
   });
 
+  // Set element ref when mainContainerRef changes
+  useEffect(() => {
+    if (mainContainerRef.current) {
+      setElementRef(mainContainerRef.current);
+    }
+  }, [setElementRef]);
+
   // Handle webcam video element ready
   const handleVideoReady = useCallback((element: HTMLVideoElement) => {
+    console.log("📹 Video element ready:", element);
     setVideoElement(element);
   }, []);
 
   // Toggle filter selection
   const handleFilterToggle = useCallback((filter: Filter) => {
     setSelectedFilters((prev) => {
-      // If filter is already selected, remove it
-      if (prev.some((f) => f.id === filter.id)) {
+      const isSelected = prev.some((f) => f.id === filter.id);
+      if (isSelected) {
+        console.log(`🔄 Removing filter: ${filter.name}`);
         return prev.filter((f) => f.id !== filter.id);
+      } else {
+        console.log(`✅ Adding filter: ${filter.name}`);
+        return [...prev, filter];
       }
-      // Otherwise add it
-      return [...prev, filter];
     });
   }, []);
 
   // Handle screenshot button click
   const handleScreenshot = useCallback(() => {
-    if (mainContainerRef.current) {
-      takeScreenshot();
-    }
+    console.log("📸 Taking screenshot...");
+    takeScreenshot();
   }, [takeScreenshot]);
 
   // Check browser compatibility on mount
   useEffect(() => {
     const compatibility = checkBrowserCompatibility();
+    console.log("🌐 Browser compatibility check:", compatibility);
 
     if (!compatibility.supported) {
       setIsCompatible(false);
@@ -94,6 +107,7 @@ const App: React.FC = () => {
   // Handle detection errors
   useEffect(() => {
     if (detectionError) {
+      console.error("❌ Face detection error:", detectionError);
       setError(detectionError);
     }
   }, [detectionError]);
@@ -105,8 +119,13 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col relative overflow-hidden">
-      <header className="bg-white shadow-sm p-4">
+      <header className="bg-white shadow-sm p-4 z-10">
         <h1 className="text-xl font-bold text-gray-800">AR Face Filter</h1>
+        <div className="text-sm text-gray-500 mt-1">
+          {isModelLoading && "Loading face detection models..."}
+          {isModelLoaded && !videoElement && "Waiting for camera..."}
+          {isModelLoaded && videoElement && "Ready to detect faces"}
+        </div>
       </header>
 
       <main className="flex-1 flex flex-col relative" ref={mainContainerRef}>
@@ -118,7 +137,8 @@ const App: React.FC = () => {
             mirrored={true}
           />
 
-          {videoElement && (
+          {/* Only show filters if we have video element and models are loaded */}
+          {videoElement && isModelLoaded && (
             <FilterOverlay
               detections={detections}
               videoElement={videoElement}
@@ -128,10 +148,13 @@ const App: React.FC = () => {
 
           {/* Loading indicator for face models */}
           {isModelLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-20">
               <div className="text-white text-center p-4">
                 <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-white mx-auto mb-4"></div>
                 <p>Loading face detection models...</p>
+                <p className="text-sm text-gray-300 mt-2">
+                  This may take a moment...
+                </p>
               </div>
             </div>
           )}
@@ -140,7 +163,7 @@ const App: React.FC = () => {
         {/* Filter Selection Panel */}
         <div
           className={`
-            absolute bottom-24 left-0 right-0 mx-auto max-w-md 
+            absolute bottom-24 left-0 right-0 mx-auto max-w-md z-30
             transform transition-transform duration-300 ease-in-out
             ${isFilterPanelOpen ? "translate-y-0" : "translate-y-full"}
           `}
@@ -154,7 +177,7 @@ const App: React.FC = () => {
         </div>
 
         {/* Control Panel */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-center">
+        <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-center z-30">
           <ControlPanel
             onScreenshot={handleScreenshot}
             onFilterPanelToggle={() => setIsFilterPanelOpen((prev) => !prev)}

@@ -1,5 +1,5 @@
 import React from "react";
-import { AppError, ERROR_CODES } from "../utils/ErrorHandling";
+import { AppError, ERROR_CODES } from "../utils/errorHandling";
 import { checkBrowserCompatibility } from "../utils/browserCompatibility";
 
 interface ErrorFallbackProps {

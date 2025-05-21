@@ -12,6 +12,7 @@ interface UseScreenshotReturn {
   takeScreenshot: () => Promise<string | null>;
   downloadScreenshot: () => Promise<void>;
   lastScreenshot: string | null;
+  setElementRef: (element: HTMLElement | null) => void;
 }
 
 export function useScreenshot({
@@ -85,38 +86,3 @@ export function useScreenshot({
     setElementRef,
   };
 }
-
-// Updated App.tsx implementation of screenshot functionality
-// In src/components/App.tsx, update the screenshot related code:
-
-// Initialize screenshot functionality with ref
-const { takeScreenshot, downloadScreenshot, setElementRef } = useScreenshot({
-  filename: "ar-face-filter",
-  onScreenshotTaken: (dataUrl) => {
-    // Show a brief flash effect
-    if (mainContainerRef.current) {
-      mainContainerRef.current.classList.add("screenshot-flash");
-      setTimeout(() => {
-        mainContainerRef.current?.classList.remove("screenshot-flash");
-      }, 300);
-    }
-
-    // Download the image
-    const link = document.createElement("a");
-    link.href = dataUrl;
-    link.download = `ar-face-filter-${new Date().toISOString()}.jpg`;
-    link.click();
-  },
-});
-
-// Add effect to set element ref when mainContainerRef changes
-useEffect(() => {
-  if (mainContainerRef.current) {
-    setElementRef(mainContainerRef.current);
-  }
-}, [mainContainerRef.current, setElementRef]);
-
-// Handle screenshot button click - no need for arguments now
-const handleScreenshot = useCallback(() => {
-  takeScreenshot();
-}, [takeScreenshot]);

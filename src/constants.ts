@@ -25,7 +25,7 @@ export const FILTERS: Filter[] = [
   {
     id: "glasses",
     name: "Glasses",
-    image: "/assets/filters/glasses.png",
+    image: "/src/assets/filters/glasses.svg", // Fixed path to .svg
     category: "eyes",
     position: (landmarks, detection) => {
       const leftEye = landmarks.getLeftEye();
@@ -49,7 +49,7 @@ export const FILTERS: Filter[] = [
   {
     id: "hat",
     name: "Hat",
-    image: "/assets/filters/hat.png",
+    image: "/src/assets/filters/hat.svg", // Fixed path to .svg
     category: "head",
     position: (landmarks, detection) => {
       const box = detection.detection.box;
@@ -65,7 +65,7 @@ export const FILTERS: Filter[] = [
   {
     id: "beard",
     name: "Beard",
-    image: "/assets/filters/beard.png",
+    image: "/src/assets/filters/beard.svg", // Fixed path to .svg
     category: "mouth",
     position: (landmarks, detection) => {
       const jawline = landmarks.getJawOutline();
@@ -89,7 +89,7 @@ export const FILTERS: Filter[] = [
   {
     id: "mustache",
     name: "Mustache",
-    image: "/assets/filters/mustache.png",
+    image: "/src/assets/filters/moustache.svg", // Fixed path to .svg (note: your file is named "moustache")
     category: "mouth",
     position: (landmarks, detection) => {
       const nose = landmarks.getNose();
