@@ -1,6 +1,6 @@
 import { Filter } from "./types/Filter";
 
-// Model paths - adjust as needed based on your project structure
+// Model paths
 export const MODEL_URL = "/models";
 
 // Model options
@@ -10,8 +10,8 @@ export const FACE_DETECTION_OPTIONS = {
 };
 
 // Performance options
-export const DETECTION_FREQUENCY = 100; // ms between detection runs
-export const MAX_FACES = 1; // Maximum number of faces to detect at once
+export const DETECTION_FREQUENCY = 100;
+export const MAX_FACES = 1;
 export const MIN_DETECTION_CONFIDENCE = 0.7;
 
 // Canvas rendering
@@ -20,22 +20,21 @@ export const CANVAS_SIZE = {
   height: 480,
 };
 
-// Available filters
+// Available 3D filters
 export const FILTERS: Filter[] = [
   {
     id: "glasses",
-    name: "Glasses",
-    image: "/src/assets/filters/glasses.svg", // Fixed path to .svg
+    name: "3D Glasses",
+    image: "/filters/glasses.svg", // Thumbnail for UI
     category: "eyes",
+    type: "3d",
+    modelType: "glasses",
     position: (landmarks, detection) => {
+      // 2D fallback positioning
       const leftEye = landmarks.getLeftEye();
       const rightEye = landmarks.getRightEye();
-
-      // Calculate center point between eyes
       const eyeLeft = leftEye[0];
       const eyeRight = rightEye[3];
-
-      // Calculate width based on eye distance
       const width = Math.abs(eyeRight.x - eyeLeft.x) * 1.8;
 
       return {
@@ -45,15 +44,38 @@ export const FILTERS: Filter[] = [
         height: width * 0.4,
       };
     },
+    position3D: (landmarks, detection) => {
+      const leftEye = landmarks.getLeftEye();
+      const rightEye = landmarks.getRightEye();
+      const box = detection.detection.box;
+
+      // Calculate center between eyes
+      const centerX =
+        ((leftEye[0].x + rightEye[3].x) / 2 - box.width / 2) / box.width;
+      const centerY =
+        ((leftEye[0].y + rightEye[3].y) / 2 - box.height / 2) / box.height;
+
+      return {
+        x: centerX,
+        y: centerY,
+        z: 0,
+        scale: Math.min(box.width, box.height) / 300,
+        rotationZ: Math.atan2(
+          rightEye[3].y - leftEye[0].y,
+          rightEye[3].x - leftEye[0].x
+        ),
+      };
+    },
   },
   {
     id: "hat",
-    name: "Hat",
-    image: "/src/assets/filters/hat.svg", // Fixed path to .svg
+    name: "3D Hat",
+    image: "/filters/hat.svg",
     category: "head",
+    type: "3d",
+    modelType: "hat",
     position: (landmarks, detection) => {
       const box = detection.detection.box;
-
       return {
         x: box.x - box.width * 0.15,
         y: box.y - box.height * 0.85,
@@ -61,21 +83,31 @@ export const FILTERS: Filter[] = [
         height: box.width * 0.8,
       };
     },
+    position3D: (landmarks, detection) => {
+      const box = detection.detection.box;
+      const forehead = landmarks.positions[24]; // Forehead point
+
+      return {
+        x: (forehead.x - box.x - box.width / 2) / box.width,
+        y: (forehead.y - box.y - box.height * 0.7) / box.height,
+        z: 0,
+        scale: Math.min(box.width, box.height) / 250,
+      };
+    },
   },
   {
     id: "beard",
-    name: "Beard",
-    image: "/src/assets/filters/beard.svg", // Fixed path to .svg
+    name: "3D Beard",
+    image: "/filters/beard.svg",
     category: "mouth",
+    type: "3d",
+    modelType: "beard",
     position: (landmarks, detection) => {
       const jawline = landmarks.getJawOutline();
       const mouth = landmarks.getMouth();
-
-      // Calculate position based on jaw and mouth
       const jawLeft = jawline[0];
       const jawRight = jawline[jawline.length - 1];
       const mouthTop = mouth[14];
-
       const width = Math.abs(jawRight.x - jawLeft.x) * 1.2;
 
       return {
@@ -85,20 +117,31 @@ export const FILTERS: Filter[] = [
         height: width * 1.2,
       };
     },
+    position3D: (landmarks, detection) => {
+      const jawline = landmarks.getJawOutline();
+      const box = detection.detection.box;
+      const chin = jawline[8]; // Chin center
+
+      return {
+        x: (chin.x - box.x - box.width / 2) / box.width,
+        y: (chin.y - box.y - box.height * 0.3) / box.height,
+        z: 0,
+        scale: Math.min(box.width, box.height) / 280,
+      };
+    },
   },
   {
     id: "mustache",
-    name: "Mustache",
-    image: "/src/assets/filters/moustache.svg", // Fixed path to .svg (note: your file is named "moustache")
+    name: "3D Mustache",
+    image: "/filters/mustache.svg",
     category: "mouth",
+    type: "3d",
+    modelType: "mustache",
     position: (landmarks, detection) => {
       const nose = landmarks.getNose();
       const mouth = landmarks.getMouth();
-
-      // Calculate position based on nose and mouth
       const noseTip = nose[3];
       const mouthTop = mouth[14];
-
       const width = Math.abs(mouth[0].x - mouth[6].x) * 1.3;
 
       return {
@@ -106,6 +149,25 @@ export const FILTERS: Filter[] = [
         y: noseTip.y * 0.97 + (mouthTop.y - noseTip.y) * 0.35,
         width: width,
         height: width * 0.4,
+      };
+    },
+    position3D: (landmarks, detection) => {
+      const nose = landmarks.getNose();
+      const mouth = landmarks.getMouth();
+      const box = detection.detection.box;
+      const noseTip = nose[3];
+      const upperLip = mouth[14];
+
+      // Position between nose and upper lip
+      const centerX = (noseTip.x - box.x - box.width / 2) / box.width;
+      const centerY =
+        ((noseTip.y + upperLip.y) / 2 - box.y - box.height / 2) / box.height;
+
+      return {
+        x: centerX,
+        y: centerY,
+        z: 0.01, // Slightly forward from face
+        scale: Math.min(box.width, box.height) / 400,
       };
     },
   },

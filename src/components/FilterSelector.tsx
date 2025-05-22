@@ -48,7 +48,6 @@ const FilterSelector: React.FC<FilterSelectorProps> = ({
                   w-16 h-16 rounded-lg overflow-hidden 
                   flex items-center justify-center
                   transition-all duration-200
-                  bg-black
                   ${
                     isFilterSelected(filter)
                       ? "ring-2 ring-blue-500 shadow-lg scale-110"
