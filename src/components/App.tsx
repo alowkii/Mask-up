@@ -20,6 +20,7 @@ const App: React.FC = () => {
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState<Filter[]>([]);
   const mainContainerRef = useRef<HTMLDivElement>(null);
+  const filterCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // Initialize face detection
   const {
@@ -32,7 +33,7 @@ const App: React.FC = () => {
     videoElement,
   });
 
-  // Initialize screenshot functionality
+  // Initialize screenshot functionality with better error handling
   const { takeScreenshot, setElementRef } = useScreenshot({
     filename: "ar-face-filter",
     onScreenshotTaken: (dataUrl) => {
@@ -53,6 +54,11 @@ const App: React.FC = () => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    },
+    onError: (error) => {
+      console.error("Screenshot error:", error);
+      // Show user-friendly error message
+      alert("Failed to take screenshot. Please try again.");
     },
   });
 
@@ -83,11 +89,27 @@ const App: React.FC = () => {
     });
   }, []);
 
-  // Handle screenshot button click
-  const handleScreenshot = useCallback(() => {
+  // Handle screenshot button click with improved error handling
+  const handleScreenshot = useCallback(async () => {
     console.log("📸 Taking screenshot...");
-    takeScreenshot();
-  }, [takeScreenshot]);
+
+    try {
+      if (!videoElement) {
+        throw new Error("No video available for screenshot");
+      }
+
+      if (videoElement.readyState < 2) {
+        throw new Error("Video not ready. Please wait a moment and try again.");
+      }
+
+      await takeScreenshot(videoElement, filterCanvasRef.current);
+    } catch (error) {
+      console.error("Screenshot failed:", error);
+      const message =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      alert(`Screenshot failed: ${message}`);
+    }
+  }, [takeScreenshot, videoElement]);
 
   // Check browser compatibility on mount
   useEffect(() => {
@@ -140,6 +162,7 @@ const App: React.FC = () => {
           {/* Only show filters if we have video element and models are loaded */}
           {videoElement && isModelLoaded && (
             <FilterOverlay
+              ref={filterCanvasRef}
               detections={detections}
               videoElement={videoElement}
               selectedFilters={selectedFilters}
