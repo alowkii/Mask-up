@@ -26,6 +26,7 @@ const App: React.FC = () => {
   const [positionAdjustments, setPositionAdjustments] = useState<
     Record<string, any>
   >({});
+  const [isVideoMirrored, setIsVideoMirrored] = useState(true);
 
   const mainContainerRef = useRef<HTMLDivElement>(null);
   const filter3DCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -80,6 +81,11 @@ const App: React.FC = () => {
   const handleVideoReady = useCallback((element: HTMLVideoElement) => {
     console.log("📹 Video element ready for 3D AR:", element);
     setVideoElement(element);
+
+    // Check if video is mirrored
+    const isMirrored = element.style.transform.includes("scaleX(-1)");
+    setIsVideoMirrored(isMirrored);
+    console.log("Video mirrored state:", isMirrored);
   }, []);
 
   // Toggle filter selection
@@ -143,6 +149,7 @@ const App: React.FC = () => {
   const exportCalibrationSettings = useCallback(() => {
     const settings = {
       positionAdjustments,
+      isVideoMirrored,
       timestamp: new Date().toISOString(),
     };
 
@@ -156,7 +163,7 @@ const App: React.FC = () => {
     link.click();
 
     URL.revokeObjectURL(url);
-  }, [positionAdjustments]);
+  }, [positionAdjustments, isVideoMirrored]);
 
   // Check browser compatibility
   useEffect(() => {
@@ -204,7 +211,9 @@ const App: React.FC = () => {
               {isModelLoaded && !videoElement && "Waiting for camera..."}
               {isModelLoaded &&
                 videoElement &&
-                `Ready for ${renderMode.toUpperCase()} AR`}
+                `Ready for ${renderMode.toUpperCase()} AR ${
+                  isVideoMirrored ? "(Mirrored)" : ""
+                }`}
             </div>
           </div>
 
@@ -255,7 +264,7 @@ const App: React.FC = () => {
           <WebcamView
             onVideoReady={handleVideoReady}
             className="w-full h-full"
-            mirrored={true}
+            mirrored={isVideoMirrored}
           />
 
           {/* 3D Filter Overlay */}
@@ -267,6 +276,7 @@ const App: React.FC = () => {
               selectedFilters={selectedFilters}
               debug={debugMode}
               positionAdjustments={positionAdjustments}
+              isVideoMirrored={isVideoMirrored}
             />
           )}
 
@@ -287,7 +297,7 @@ const App: React.FC = () => {
           <div className="absolute top-4 right-4 space-y-2">
             {renderMode === "3d" && videoElement && isModelLoaded && (
               <div className="bg-blue-500 text-white px-2 py-1 rounded text-xs">
-                3D AR Active
+                3D AR Active {isVideoMirrored && "(Mirrored)"}
               </div>
             )}
 

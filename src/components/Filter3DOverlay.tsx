@@ -22,6 +22,7 @@ interface Filter3DOverlayProps {
   className?: string;
   debug?: boolean;
   positionAdjustments?: Record<string, any>;
+  isVideoMirrored?: boolean;
 }
 
 const Filter3DOverlay = forwardRef<HTMLCanvasElement, Filter3DOverlayProps>(
@@ -33,6 +34,7 @@ const Filter3DOverlay = forwardRef<HTMLCanvasElement, Filter3DOverlayProps>(
       className = "",
       debug = false,
       positionAdjustments = {},
+      isVideoMirrored = true,
     },
     ref
   ) => {
@@ -40,30 +42,46 @@ const Filter3DOverlay = forwardRef<HTMLCanvasElement, Filter3DOverlayProps>(
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const sceneRef = useRef<THREE.Scene | null>(null);
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-    const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+    const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
     const filtersRef = useRef<Map<string, THREE.Group>>(new Map());
     const debugGroupRef = useRef<THREE.Group | null>(null);
-    const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+    const animationRef = useRef<number>(0);
+    const [dimensions, setDimensions] = useState({
+      width: 0,
+      height: 0,
+      videoWidth: 0,
+      videoHeight: 0,
+    });
 
     // Expose canvas ref to parent component
     useImperativeHandle(ref, () => canvasRef.current!, []);
 
-    // Initialize Three.js scene
+    // Initialize Three.js scene with orthographic camera for better 2D overlay
     useEffect(() => {
-      if (!mountRef.current) return;
+      if (
+        !mountRef.current ||
+        dimensions.width === 0 ||
+        dimensions.height === 0
+      )
+        return;
 
       // Scene setup
       const scene = new THREE.Scene();
       sceneRef.current = scene;
 
-      // Camera setup with proper FOV matching typical webcam
-      const camera = new THREE.PerspectiveCamera(
-        60, // Reduced FOV for better face tracking
-        dimensions.width / dimensions.height || 1,
-        0.1, // Near
-        100 // Far
+      // Use orthographic camera for better 2D positioning
+      const aspect = dimensions.width / dimensions.height;
+      const frustumSize = 2;
+      const camera = new THREE.OrthographicCamera(
+        (-frustumSize * aspect) / 2, // left
+        (frustumSize * aspect) / 2, // right
+        frustumSize / 2, // top
+        -frustumSize / 2, // bottom
+        0.1, // near
+        10 // far
       );
-      camera.position.set(0, 0, 2); // Moved camera further back
+      camera.position.set(0, 0, 1);
+      camera.lookAt(0, 0, 0);
       cameraRef.current = camera;
 
       // Renderer setup
@@ -72,7 +90,7 @@ const Filter3DOverlay = forwardRef<HTMLCanvasElement, Filter3DOverlayProps>(
         antialias: true,
         preserveDrawingBuffer: true,
       });
-      renderer.setSize(dimensions.width || 640, dimensions.height || 480);
+      renderer.setSize(dimensions.width, dimensions.height);
       renderer.setClearColor(0x000000, 0); // Transparent background
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -96,7 +114,11 @@ const Filter3DOverlay = forwardRef<HTMLCanvasElement, Filter3DOverlayProps>(
       }
 
       return () => {
-        if (mountRef.current && renderer.domElement) {
+        if (
+          mountRef.current &&
+          renderer.domElement &&
+          mountRef.current.contains(renderer.domElement)
+        ) {
           mountRef.current.removeChild(renderer.domElement);
         }
         renderer.dispose();
@@ -109,32 +131,68 @@ const Filter3DOverlay = forwardRef<HTMLCanvasElement, Filter3DOverlayProps>(
       if (!videoElement) return;
 
       const updateDimensions = () => {
-        const newDimensions = {
-          width: videoElement.videoWidth || videoElement.clientWidth,
-          height: videoElement.videoHeight || videoElement.clientHeight,
-        };
+        // Use the video's actual video dimensions for face detection coordinate mapping
+        const videoWidth = videoElement.videoWidth;
+        const videoHeight = videoElement.videoHeight;
 
-        if (newDimensions.width > 0 && newDimensions.height > 0) {
-          setDimensions(newDimensions);
+        // Use the displayed dimensions for canvas sizing
+        const rect = videoElement.getBoundingClientRect();
+        const displayWidth = rect.width;
+        const displayHeight = rect.height;
+
+        if (
+          videoWidth > 0 &&
+          videoHeight > 0 &&
+          displayWidth > 0 &&
+          displayHeight > 0
+        ) {
+          setDimensions({
+            width: displayWidth,
+            height: displayHeight,
+            videoWidth,
+            videoHeight,
+          });
+          console.log("Updated dimensions:", {
+            display: { width: displayWidth, height: displayHeight },
+            video: { width: videoWidth, height: videoHeight },
+          });
         }
       };
 
+      // Update dimensions immediately if video is ready
       if (videoElement.readyState >= 2) {
         updateDimensions();
       }
 
+      // Listen for video metadata changes
       videoElement.addEventListener("loadedmetadata", updateDimensions);
+
+      // Also listen for resize events
+      const resizeObserver = new ResizeObserver(updateDimensions);
+      resizeObserver.observe(videoElement);
+
       return () => {
         videoElement.removeEventListener("loadedmetadata", updateDimensions);
+        resizeObserver.disconnect();
       };
     }, [videoElement]);
 
-    // Update renderer size when dimensions change
+    // Update camera when dimensions change
     useEffect(() => {
       if (rendererRef.current && cameraRef.current && dimensions.width > 0) {
-        rendererRef.current.setSize(dimensions.width, dimensions.height);
-        cameraRef.current.aspect = dimensions.width / dimensions.height;
-        cameraRef.current.updateProjectionMatrix();
+        const renderer = rendererRef.current;
+        const camera = cameraRef.current;
+
+        renderer.setSize(dimensions.width, dimensions.height);
+
+        // Update orthographic camera
+        const aspect = dimensions.width / dimensions.height;
+        const frustumSize = 2;
+        camera.left = (-frustumSize * aspect) / 2;
+        camera.right = (frustumSize * aspect) / 2;
+        camera.top = frustumSize / 2;
+        camera.bottom = -frustumSize / 2;
+        camera.updateProjectionMatrix();
       }
     }, [dimensions]);
 
@@ -181,7 +239,7 @@ const Filter3DOverlay = forwardRef<HTMLCanvasElement, Filter3DOverlayProps>(
       });
     }, [selectedFilters]);
 
-    // Improved face-to-3D coordinate mapping
+    // Improved face-to-3D coordinate mapping with proper 3D rotation
     const mapFaceTo3D = (
       landmarks: faceapi.FaceLandmarks68,
       detection: any
@@ -190,122 +248,163 @@ const Filter3DOverlay = forwardRef<HTMLCanvasElement, Filter3DOverlayProps>(
       const positions = landmarks.positions;
 
       // Get key landmark points
-      const leftEye = landmarks.getLeftEye()[0]; // Left eye outer corner
-      const rightEye = landmarks.getRightEye()[3]; // Right eye outer corner
-      const noseTip = landmarks.getNose()[3]; // Nose tip
-      const chin = landmarks.getJawOutline()[8]; // Chin center
-      const forehead = positions[24]; // Forehead center
+      const leftEye = landmarks.getLeftEye()[0];
+      const rightEye = landmarks.getRightEye()[3];
+      const noseTip = landmarks.getNose()[3];
+      const noseTop = landmarks.getNose()[0];
+      const chin = landmarks.getJawOutline()[8];
+      const forehead = positions[24];
+      const leftJaw = landmarks.getJawOutline()[0];
+      const rightJaw = landmarks.getJawOutline()[16];
 
-      // Calculate face center (use nose tip as primary reference)
-      const faceCenterX = noseTip.x;
-      const faceCenterY = noseTip.y;
+      // Check if video is mirrored
+      const isVideoMirroredState =
+        isVideoMirrored ??
+        (videoElement?.style.transform.includes("scaleX(-1)") || false);
 
-      // Convert to normalized coordinates [-1, 1]
-      const normalizedX = (faceCenterX / dimensions.width) * 2 - 1;
-      const normalizedY = -((faceCenterY / dimensions.height) * 2 - 1); // Flip Y axis
+      // Use video dimensions for face detection coordinates
+      const videoWidth = dimensions.videoWidth || dimensions.width;
+      const videoHeight = dimensions.videoHeight || dimensions.height;
 
-      // Calculate face dimensions for scaling
+      // Convert face center to normalized coordinates
+      const faceCenterX = (noseTip.x / videoWidth) * 2 - 1;
+      const faceCenterY = -((noseTip.y / videoHeight) * 2 - 1); // Flip Y
+
+      // Calculate face dimensions for better scaling
       const faceWidth = Math.abs(rightEye.x - leftEye.x);
       const faceHeight = Math.abs(chin.y - forehead.y);
-      const avgFaceSize = (faceWidth + faceHeight) / 2;
+      const jawWidth = Math.abs(rightJaw.x - leftJaw.x);
 
-      // Scale factor - adjust this to make filters larger/smaller
-      const baseScale = avgFaceSize / 150; // Reduced from 200 to make filters smaller
+      // Improved scale calculation - use face width as primary reference
+      const baseScale = faceWidth / 200; // More intuitive scaling based on face width
 
-      // Calculate face rotation (roll - head tilt left/right)
-      const eyeAngle = Math.atan2(
+      // Calculate 3D rotations
+
+      // 1. Roll (Z-axis) - Head tilt left/right
+      let rollAngle = Math.atan2(
         rightEye.y - leftEye.y,
         rightEye.x - leftEye.x
       );
+      if (isVideoMirroredState) {
+        rollAngle = -rollAngle;
+      }
 
-      // Estimate face orientation (simplified)
-      const eyeDistance = Math.abs(rightEye.x - leftEye.x);
-      const expectedEyeDistance = faceWidth * 0.35; // Typical eye distance ratio
-      const depthFactor = eyeDistance / expectedEyeDistance;
+      // 2. Yaw (Y-axis) - Head turn left/right
+      // Estimate from face symmetry and eye positions
+      const eyeCenter = (leftEye.x + rightEye.x) / 2;
+      const faceCenter = noseTip.x;
+      const jawCenter = (leftJaw.x + rightJaw.x) / 2;
 
-      // Calculate yaw (head turn left/right) - simplified estimation
-      const faceCenter = (leftEye.x + rightEye.x) / 2;
-      const faceCenterNormalized = faceCenter / dimensions.width;
-      const yawAngle = (faceCenterNormalized - 0.5) * 0.5; // Max 30 degrees
+      // Calculate asymmetry to estimate head turn
+      const faceAsymmetry = (eyeCenter - faceCenter) / faceWidth;
+      const jawAsymmetry = (jawCenter - faceCenter) / jawWidth;
+      const avgAsymmetry = (faceAsymmetry + jawAsymmetry) / 2;
+
+      let yawAngle = avgAsymmetry * Math.PI * 0.3; // Max 54 degrees
+      if (isVideoMirroredState) {
+        yawAngle = -yawAngle;
+      }
+
+      // 3. Pitch (X-axis) - Head nod up/down
+      // Estimate from nose position relative to eye line
+      const eyeLineY = (leftEye.y + rightEye.y) / 2;
+      const noseOffsetY = noseTip.y - eyeLineY;
+      const normalNoseOffset = faceHeight * 0.3; // Normal nose position below eyes
+
+      const pitchFactor = (noseOffsetY - normalNoseOffset) / faceHeight;
+      const pitchAngle = pitchFactor * Math.PI * 0.2; // Max 36 degrees
 
       return {
-        position: {
-          x: normalizedX,
-          y: normalizedY,
+        center: {
+          x: faceCenterX,
+          y: faceCenterY,
           z: 0,
         },
         scale: baseScale,
         rotation: {
-          x: 0,
-          y: yawAngle,
-          z: eyeAngle,
+          x: pitchAngle, // Pitch (nod up/down)
+          y: yawAngle, // Yaw (turn left/right)
+          z: rollAngle, // Roll (tilt left/right)
         },
         landmarks: {
           leftEye,
           rightEye,
           noseTip,
+          noseTop,
           chin,
           forehead,
+          leftJaw,
+          rightJaw,
           faceWidth,
           faceHeight,
+          jawWidth,
         },
+        isVideoMirrored: isVideoMirroredState,
+        videoWidth,
+        videoHeight,
       };
     };
 
-    // Get specific position for each filter type
+    // Get specific position for each filter type with proper scaling
     const getFilterPosition = (filterId: string, faceData: any) => {
-      const { position, scale, rotation, landmarks } = faceData;
+      const { center, scale, rotation, landmarks, videoWidth, videoHeight } =
+        faceData;
 
       switch (filterId) {
         case "glasses":
-          // Position between the eyes
+          // Position at eye level using video coordinates
           const eyeCenterX = (landmarks.leftEye.x + landmarks.rightEye.x) / 2;
           const eyeCenterY = (landmarks.leftEye.y + landmarks.rightEye.y) / 2;
+
+          const glassesX = (eyeCenterX / videoWidth) * 2 - 1;
+          const glassesY = -((eyeCenterY / videoHeight) * 2 - 1);
+
           return {
-            x: (eyeCenterX / dimensions.width) * 2 - 1,
-            y: -((eyeCenterY / dimensions.height) * 2 - 1),
-            z: 0.02,
-            scale: scale * 1.2,
-            rotation: { ...rotation, x: -0.1 }, // Slight downward tilt
+            x: glassesX,
+            y: glassesY,
+            z: 0.01,
+            scale: scale * 0.8, // Proportional to face width
+            rotation: rotation,
           };
 
         case "hat":
-          // Position above the forehead
+          // Position above forehead
+          const hatY = landmarks.forehead.y - landmarks.faceHeight * 0.6;
           return {
-            x: position.x,
-            y: position.y + (landmarks.faceHeight / dimensions.height) * 1.2,
-            z: -0.05,
-            scale: scale * 1.8,
+            x: center.x,
+            y: -((hatY / videoHeight) * 2 - 1),
+            z: -0.02,
+            scale: scale * 1.2, // Larger for hat
             rotation: rotation,
           };
 
         case "beard":
-          // Position below the mouth, above the chin
+          // Position below mouth area
+          const beardY = landmarks.chin.y + landmarks.faceHeight * 0.05;
           return {
-            x: position.x,
-            y: position.y - (landmarks.faceHeight / dimensions.height) * 0.6,
+            x: center.x,
+            y: -((beardY / videoHeight) * 2 - 1),
             z: 0.01,
-            scale: scale * 1.4,
+            scale: scale * 1.0, // Similar to face width
             rotation: rotation,
           };
 
         case "mustache":
-          // Position between nose and upper lip
-          const noseToMouthY =
-            landmarks.noseTip.y + landmarks.faceHeight * 0.15;
+          // Position between nose and mouth
+          const mustacheY = landmarks.noseTip.y + landmarks.faceHeight * 0.2;
           return {
-            x: position.x,
-            y: -((noseToMouthY / dimensions.height) * 2 - 1),
-            z: 0.03,
-            scale: scale * 0.8,
+            x: center.x,
+            y: -((mustacheY / videoHeight) * 2 - 1),
+            z: 0.02,
+            scale: scale * 0.6, // Smaller mustache
             rotation: rotation,
           };
 
         default:
           return {
-            x: position.x,
-            y: position.y,
-            z: position.z,
+            x: center.x,
+            y: center.y,
+            z: center.z,
             scale: scale,
             rotation: rotation,
           };
@@ -316,125 +415,117 @@ const Filter3DOverlay = forwardRef<HTMLCanvasElement, Filter3DOverlayProps>(
     const updateDebugVisualization = (faceData: any) => {
       if (!debug || !debugGroupRef.current) return;
 
-      // Clear previous debug objects
       debugGroupRef.current.clear();
 
-      // Create coordinate system helper
-      const axesHelper = new THREE.AxesHelper(0.5);
-      debugGroupRef.current.add(axesHelper);
-
-      // Create face center indicator
-      const centerGeometry = new THREE.SphereGeometry(0.02, 8, 8);
+      // Face center indicator
+      const centerGeometry = new THREE.SphereGeometry(0.05, 8, 8);
       const centerMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
       const centerSphere = new THREE.Mesh(centerGeometry, centerMaterial);
-      centerSphere.position.set(
-        faceData.position.x,
-        faceData.position.y,
-        faceData.position.z
-      );
+      centerSphere.position.set(faceData.center.x, faceData.center.y, 0);
       debugGroupRef.current.add(centerSphere);
 
-      // Add text helper
-      console.log("Face Debug Info:", {
-        position: faceData.position,
+      // Log debug info
+      console.log("Face Debug:", {
+        center: faceData.center,
         scale: faceData.scale,
         rotation: faceData.rotation,
-        faceWidth: faceData.landmarks.faceWidth,
-        faceHeight: faceData.landmarks.faceHeight,
+        dimensions,
       });
     };
 
-    // Update filter positions and render
+    // Animation and rendering loop
     useEffect(() => {
-      if (
-        !rendererRef.current ||
-        !sceneRef.current ||
-        !cameraRef.current ||
-        !detections ||
-        !detections.length
-      ) {
-        // Render empty scene if no detections
-        if (rendererRef.current && sceneRef.current && cameraRef.current) {
-          filtersRef.current.forEach((filterGroup) => {
-            filterGroup.visible = false;
-          });
-          rendererRef.current.render(sceneRef.current, cameraRef.current);
-        }
+      if (!rendererRef.current || !sceneRef.current || !cameraRef.current)
         return;
-      }
 
-      const scene = sceneRef.current;
       const renderer = rendererRef.current;
+      const scene = sceneRef.current;
       const camera = cameraRef.current;
 
-      // Hide all filters first
-      filtersRef.current.forEach((filterGroup) => {
-        filterGroup.visible = false;
-      });
+      const animate = () => {
+        // Hide all filters first
+        filtersRef.current.forEach((filterGroup) => {
+          filterGroup.visible = false;
+        });
 
-      // Process each detected face
-      detections.forEach((detection, faceIndex) => {
-        if (!detection.detection || detection.detection.score < 0.7) return;
+        // Process detections
+        if (detections && detections.length > 0) {
+          detections.forEach((detection, faceIndex) => {
+            if (detection.detection.score < 0.7) return;
 
-        const faceData = mapFaceTo3D(detection.landmarks, detection);
+            const faceData = mapFaceTo3D(detection.landmarks, detection);
 
-        // Update debug visualization for first face
-        if (faceIndex === 0) {
-          updateDebugVisualization(faceData);
+            // Update debug visualization for first face
+            if (faceIndex === 0) {
+              updateDebugVisualization(faceData);
+            }
+
+            // Position filters for this face
+            selectedFilters.forEach((filter) => {
+              const filterGroup = filtersRef.current.get(filter.id);
+              if (!filterGroup) return;
+
+              const filterPos = getFilterPosition(filter.id, faceData);
+
+              // Apply calibration adjustments
+              const adjustments = positionAdjustments[filter.id] || {};
+              const finalPosition = {
+                x: filterPos.x + (adjustments.x || 0),
+                y: filterPos.y + (adjustments.y || 0),
+                z: filterPos.z + (adjustments.z || 0),
+                scale: filterPos.scale * (adjustments.scale || 1),
+                rotation: {
+                  x: (filterPos.rotation.x || 0) + (adjustments.rotX || 0),
+                  y: (filterPos.rotation.y || 0) + (adjustments.rotY || 0),
+                  z: (filterPos.rotation.z || 0) + (adjustments.rotZ || 0),
+                },
+              };
+
+              // Apply transformations
+              filterGroup.position.set(
+                finalPosition.x,
+                finalPosition.y,
+                finalPosition.z
+              );
+              filterGroup.rotation.set(
+                finalPosition.rotation.x,
+                finalPosition.rotation.y,
+                finalPosition.rotation.z
+              );
+              filterGroup.scale.setScalar(finalPosition.scale);
+              filterGroup.visible = true;
+
+              // Add subtle animation
+              if (filter.id === "hat") {
+                const time = Date.now() * 0.001;
+                filterGroup.position.y += Math.sin(time) * 0.02;
+              }
+            });
+          });
         }
 
-        // Position filters for this face
-        selectedFilters.forEach((filter) => {
-          const filterGroup = filtersRef.current.get(filter.id);
-          if (!filterGroup) return;
+        renderer.render(scene, camera);
+        animationRef.current = requestAnimationFrame(animate);
+      };
 
-          const filterPos = getFilterPosition(filter.id, faceData);
+      animationRef.current = requestAnimationFrame(animate);
 
-          // Apply calibration adjustments
-          const adjustments = positionAdjustments[filter.id] || {};
-          const finalPosition = {
-            x: filterPos.x + (adjustments.x || 0),
-            y: filterPos.y + (adjustments.y || 0),
-            z: filterPos.z + (adjustments.z || 0),
-            scale: filterPos.scale * (adjustments.scale || 1),
-            rotation: {
-              x: (filterPos.rotation.x || 0) + (adjustments.rotX || 0),
-              y: (filterPos.rotation.y || 0) + (adjustments.rotY || 0),
-              z: (filterPos.rotation.z || 0) + (adjustments.rotZ || 0),
-            },
-          };
-
-          // Apply transformations
-          filterGroup.position.set(
-            finalPosition.x,
-            finalPosition.y,
-            finalPosition.z
-          );
-          filterGroup.rotation.set(
-            finalPosition.rotation.x,
-            finalPosition.rotation.y,
-            finalPosition.rotation.z
-          );
-          filterGroup.scale.setScalar(finalPosition.scale);
-          filterGroup.visible = true;
-
-          // Add subtle breathing animation for hat
-          if (filter.id === "hat") {
-            const time = Date.now() * 0.002;
-            filterGroup.position.y += Math.sin(time) * 0.01;
-          }
-        });
-      });
-
-      // Render the scene
-      renderer.render(scene, camera);
-    }, [detections, selectedFilters, dimensions, debug]);
+      return () => {
+        if (animationRef.current) {
+          cancelAnimationFrame(animationRef.current);
+        }
+      };
+    }, [detections, selectedFilters, dimensions, debug, positionAdjustments]);
 
     return (
       <div
         ref={mountRef}
-        className={`absolute top-0 left-0 w-full h-full pointer-events-none ${className}`}
-        style={{ zIndex: 1 }}
+        className={`absolute inset-0 pointer-events-none ${className}`}
+        style={{
+          zIndex: 10,
+          width: "100%",
+          height: "100%",
+        }}
       />
     );
   }

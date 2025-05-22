@@ -93,15 +93,21 @@ const WebcamView: React.FC<WebcamViewProps> = ({
       }
     };
 
-    window.addEventListener("resize", updateDimensions);
+    // Use ResizeObserver for better performance
+    const resizeObserver = new ResizeObserver(updateDimensions);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    // Initial update
     updateDimensions();
 
     return () => {
-      window.removeEventListener("resize", updateDimensions);
+      resizeObserver.disconnect();
     };
   }, []);
 
-  // Video constraints
+  // Video constraints with optimized settings
   const videoConstraints = {
     width: { ideal: 1280, min: 640 },
     height: { ideal: 720, min: 480 },
@@ -112,10 +118,10 @@ const WebcamView: React.FC<WebcamViewProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`relative overflow-hidden bg-black ${className}`}
+      className={`video-container relative overflow-hidden bg-black ${className}`}
     >
       {error ? (
-        <div className="absolute inset-0 flex items-center justify-center text-center p-4 bg-red-50">
+        <div className="absolute inset-0 flex items-center justify-center text-center p-4 bg-red-50 z-10">
           <div>
             <div className="text-red-500 mb-4">
               <svg
@@ -159,11 +165,12 @@ const WebcamView: React.FC<WebcamViewProps> = ({
             className="absolute top-0 left-0 w-full h-full object-cover"
             style={{
               transform: mirrored ? "scaleX(-1)" : "none",
+              zIndex: 1,
             }}
           />
 
           {!isWebcamReady && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-75">
+            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-75 z-20">
               <div className="text-white text-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white mx-auto mb-4"></div>
                 <p className="text-lg">Initializing camera...</p>
@@ -177,7 +184,7 @@ const WebcamView: React.FC<WebcamViewProps> = ({
           {isWebcamReady && (
             <button
               onClick={switchCamera}
-              className="absolute bottom-4 right-4 bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-3 rounded-full transition-all duration-200"
+              className="absolute bottom-4 right-4 bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-3 rounded-full transition-all duration-200 z-30"
               aria-label="Switch camera"
             >
               <svg
