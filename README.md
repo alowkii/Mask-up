@@ -90,7 +90,7 @@ npm run preview      # Preview build
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
